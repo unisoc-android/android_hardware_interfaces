@@ -32,6 +32,18 @@ namespace fingerprint {
 namespace V2_1 {
 namespace implementation {
 
+/*Fp load hal to support multi fingerprint*/
+#define SUNWAVE_FINGERPRINT_HARDWARE_MODULE_ID  "swfingerprint"
+#define MICROARRAY_FINGERPRINT_HARDWARE_MODULE_ID  "microarray.fingerprint"
+static const char *variant_keys[] = {
+    FINGERPRINT_HARDWARE_MODULE_ID,
+    SUNWAVE_FINGERPRINT_HARDWARE_MODULE_ID,
+    MICROARRAY_FINGERPRINT_HARDWARE_MODULE_ID,
+};
+
+static const int FP_VARIANT_KEYS_COUNT =
+    (sizeof(variant_keys)/sizeof(variant_keys[0]));
+
 // Supported fingerprint HAL version
 static const uint16_t kVersion = HARDWARE_MODULE_API_VERSION(2, 1);
 
@@ -106,6 +118,7 @@ FingerprintError BiometricsFingerprint::VendorErrorFilter(int32_t error,
         default:
             if (error >= FINGERPRINT_ERROR_VENDOR_BASE) {
                 // vendor specific code.
+                ALOGD("VendorErrorFilter:vendor error code:%d", error);
                 *vendorCode = error - FINGERPRINT_ERROR_VENDOR_BASE;
                 return FingerprintError::ERROR_VENDOR;
             }
@@ -135,6 +148,7 @@ FingerprintAcquiredInfo BiometricsFingerprint::VendorAcquiredFilter(
         default:
             if (info >= FINGERPRINT_ACQUIRED_VENDOR_BASE) {
                 // vendor specific code.
+                ALOGD("VendorAcquiredFilter:vendor acquire code:%d", info);
                 *vendorCode = info - FINGERPRINT_ACQUIRED_VENDOR_BASE;
                 return FingerprintAcquiredInfo::ACQUIRED_VENDOR;
             }
@@ -160,6 +174,7 @@ Return<uint64_t> BiometricsFingerprint::preEnroll()  {
 
 Return<RequestStatus> BiometricsFingerprint::enroll(const hidl_array<uint8_t, 69>& hat,
         uint32_t gid, uint32_t timeoutSec) {
+    ALOGD("enroll(gid=%d, timeoutSec=%d)\n", gid, timeoutSec);
     const hw_auth_token_t* authToken =
         reinterpret_cast<const hw_auth_token_t*>(hat.data());
     return ErrorFilter(mDevice->enroll(mDevice, authToken, gid, timeoutSec));
@@ -174,14 +189,17 @@ Return<uint64_t> BiometricsFingerprint::getAuthenticatorId() {
 }
 
 Return<RequestStatus> BiometricsFingerprint::cancel() {
+    ALOGD("cancel\n");
     return ErrorFilter(mDevice->cancel(mDevice));
 }
 
 Return<RequestStatus> BiometricsFingerprint::enumerate()  {
+    ALOGD("enumerate\n");
     return ErrorFilter(mDevice->enumerate(mDevice));
 }
 
 Return<RequestStatus> BiometricsFingerprint::remove(uint32_t gid, uint32_t fid) {
+    ALOGD("remove(gid=%d, fid=%d)\n", gid, fid);
     return ErrorFilter(mDevice->remove(mDevice, gid, fid));
 }
 
@@ -201,6 +219,7 @@ Return<RequestStatus> BiometricsFingerprint::setActiveGroup(uint32_t gid,
 
 Return<RequestStatus> BiometricsFingerprint::authenticate(uint64_t operationId,
         uint32_t gid) {
+    ALOGD("authenticate(operationId=%" PRId64 ", gid=%d)\n", operationId, gid);
     return ErrorFilter(mDevice->authenticate(mDevice, operationId, gid));
 }
 
@@ -214,28 +233,41 @@ IBiometricsFingerprint* BiometricsFingerprint::getInstance() {
 fingerprint_device_t* BiometricsFingerprint::openHal() {
     int err;
     const hw_module_t *hw_mdl = nullptr;
-    ALOGD("Opening fingerprint hal library...");
-    if (0 != (err = hw_get_module(FINGERPRINT_HARDWARE_MODULE_ID, &hw_mdl))) {
-        ALOGE("Can't open fingerprint HW Module, error: %d", err);
-        return nullptr;
-    }
-
-    if (hw_mdl == nullptr) {
-        ALOGE("No valid fingerprint module");
-        return nullptr;
-    }
-
-    fingerprint_module_t const *module =
-        reinterpret_cast<const fingerprint_module_t*>(hw_mdl);
-    if (module->common.methods->open == nullptr) {
-        ALOGE("No valid open method");
-        return nullptr;
-    }
-
     hw_device_t *device = nullptr;
+    ALOGD("Opening fingerprint hal library...");
 
-    if (0 != (err = module->common.methods->open(hw_mdl, nullptr, &device))) {
-        ALOGE("Can't open fingerprint methods, error: %d", err);
+    for(int i = 0; i < FP_VARIANT_KEYS_COUNT; i++) {
+        ALOGD("fingerprint open hal the varient_key is: %s", variant_keys[i]);
+        if (0 != (err = hw_get_module(variant_keys[i], &hw_mdl))) {
+            ALOGE("Can't open fingerprint HW Module, error: %d", err);
+            continue;
+        }
+
+        if (hw_mdl == nullptr) {
+            ALOGE("No such a fingerprint module:%s.", variant_keys[i]);
+            continue;
+        }
+
+        fingerprint_module_t const *module =
+        reinterpret_cast<const fingerprint_module_t*>(hw_mdl);
+        if (module->common.methods->open == nullptr) {
+            ALOGE("No valid open method");
+            continue;
+        }
+
+        device = nullptr;
+
+        if (0 != (err = module->common.methods->open(hw_mdl, nullptr, &device))) {
+            ALOGE("Can't open fingerprint methods, error: %d", err);
+            continue;
+        }
+
+        ALOGD("fingerprint HAL successfully initialized,cur sensor = %s",variant_keys[i]);
+        break;
+    }
+
+    if (device == nullptr) {
+        ALOGE("fingerprint HAL can't initialized");
         return nullptr;
     }
 

@@ -35,7 +35,7 @@ static constexpr uint32_t kMaxGscanFrequenciesForBand = 64;
 static constexpr uint32_t kLinkLayerStatsDataMpduSizeThreshold = 128;
 static constexpr uint32_t kMaxWakeReasonStatsArraySize = 32;
 static constexpr uint32_t kMaxRingBuffers = 10;
-static constexpr uint32_t kMaxStopCompleteWaitMs = 100;
+static constexpr uint32_t kMaxStopCompleteWaitMs = 200;
 static constexpr char kDriverPropName[] = "wlan.driver.status";
 
 // Helper function to create a non-const char* for legacy Hal API's.
@@ -341,7 +341,7 @@ WifiLegacyHal::WifiLegacyHal(
       iface_tool_(iface_tool) {}
 
 wifi_error WifiLegacyHal::initialize() {
-    LOG(DEBUG) << "Initialize legacy HAL";
+    LOG(INFO) << "Initialize legacy HAL";
     // TODO: Add back the HAL Tool if we need to. All we need from the HAL tool
     // for now is this function call which we can directly call.
     if (!initHalFuncTableWithStubs(&global_func_table_)) {
@@ -361,10 +361,10 @@ wifi_error WifiLegacyHal::start() {
     CHECK(global_func_table_.wifi_initialize && !global_handle_ &&
           iface_name_to_handle_.empty() && !awaiting_event_loop_termination_);
     if (is_started_) {
-        LOG(DEBUG) << "Legacy HAL already started";
+        LOG(INFO) << "Legacy HAL already started";
         return WIFI_SUCCESS;
     }
-    LOG(DEBUG) << "Waiting for the driver ready";
+    LOG(INFO) << "Waiting for the driver ready";
     wifi_error status = global_func_table_.wifi_wait_for_driver_ready();
     if (status == WIFI_ERROR_TIMED_OUT) {
         LOG(ERROR) << "Timed out awaiting driver ready";
@@ -372,7 +372,7 @@ wifi_error WifiLegacyHal::start() {
     }
     property_set(kDriverPropName, "ok");
 
-    LOG(DEBUG) << "Starting legacy HAL";
+    LOG(INFO) << "Starting legacy HAL";
     if (!iface_tool_.lock()->SetWifiUpState(true)) {
         LOG(ERROR) << "Failed to set WiFi interface up";
         return WIFI_ERROR_UNKNOWN;
@@ -388,7 +388,7 @@ wifi_error WifiLegacyHal::start() {
         LOG(ERROR) << "Failed to retrieve wlan interface handle";
         return status;
     }
-    LOG(DEBUG) << "Legacy HAL start complete";
+    LOG(INFO) << "Legacy HAL start complete";
     is_started_ = true;
     return WIFI_SUCCESS;
 }
@@ -397,11 +397,11 @@ wifi_error WifiLegacyHal::stop(
     /* NONNULL */ std::unique_lock<std::recursive_mutex>* lock,
     const std::function<void()>& on_stop_complete_user_callback) {
     if (!is_started_) {
-        LOG(DEBUG) << "Legacy HAL already stopped";
+        LOG(INFO) << "Legacy HAL already stopped";
         on_stop_complete_user_callback();
         return WIFI_SUCCESS;
     }
-    LOG(DEBUG) << "Stopping legacy HAL";
+    LOG(INFO) << "Stopping legacy HAL";
     on_stop_complete_internal_callback = [on_stop_complete_user_callback,
                                           this](wifi_handle handle) {
         CHECK_EQ(global_handle_, handle) << "Handle mismatch";
@@ -422,7 +422,7 @@ wifi_error WifiLegacyHal::stop(
         LOG(ERROR) << "Legacy HAL stop failed or timed out";
         return WIFI_ERROR_UNKNOWN;
     }
-    LOG(DEBUG) << "Legacy HAL stop complete";
+    LOG(INFO) << "Legacy HAL stop complete";
     return WIFI_SUCCESS;
 }
 
@@ -1377,14 +1377,14 @@ wifi_interface_handle WifiLegacyHal::getIfaceHandle(
 }
 
 void WifiLegacyHal::runEventLoop() {
-    LOG(DEBUG) << "Starting legacy HAL event loop";
+    LOG(INFO) << "Starting legacy HAL event loop";
     global_func_table_.wifi_event_loop(global_handle_);
     const auto lock = hidl_sync_util::acquireGlobalLock();
     if (!awaiting_event_loop_termination_) {
         LOG(FATAL)
             << "Legacy HAL event loop terminated, but HAL was not stopping";
     }
-    LOG(DEBUG) << "Legacy HAL event loop terminated";
+    LOG(INFO) << "Legacy HAL event loop terminated";
     awaiting_event_loop_termination_ = false;
     stop_wait_cv_.notify_one();
 }
@@ -1406,7 +1406,7 @@ WifiLegacyHal::getGscanCachedResults(const std::string& iface_name) {
         for (int i = 0; i < num_scan_results; i++) {
             auto& scan_result = cached_scan_result.results[i];
             if (scan_result.ie_length > 0) {
-                LOG(DEBUG) << "Cached scan result has non-zero IE length "
+                LOG(INFO) << "Cached scan result has non-zero IE length "
                            << scan_result.ie_length;
                 scan_result.ie_length = 0;
             }

@@ -34,6 +34,7 @@
 #include <utils/Errors.h>
 
 #include <health2/Health.h>
+#include <time.h>
 
 using namespace android;
 
@@ -96,6 +97,46 @@ int healthd_register_event(int fd, void (*handler)(uint32_t), EventWakeup wakeup
     return 0;
 }
 
+// NOTE: Bug #693427 low power Feature BEG-->
+// to align the next start alarm time to (DEFAULT_PERIODIC_CHORES_INTERVAL_SLOW/60)mins(defalult 10min),
+// and return the seconds to next start alarm time
+// return -1 for fail
+static int next_align_start_time() {
+        time_t now;
+        struct tm ptm;
+
+        // DEFAULT_PERIODIC_CHORES_INTERVAL_SLOW should multi-times of 5 mins
+        if (DEFAULT_PERIODIC_CHORES_INTERVAL_SLOW % (5 *60) !=0)
+                return -1;
+        time(&now);
+        localtime_r(&now, &ptm);
+
+        KLOG_INFO(LOG_TAG, "now:%ld, sec:%d, min:%d, hour:%d, day:%d\n",
+                now, ptm.tm_sec, ptm.tm_min, ptm.tm_hour, ptm.tm_mday);
+
+        int align_min = DEFAULT_PERIODIC_CHORES_INTERVAL_SLOW/60;
+        if (align_min <= 0) align_min = 10;
+        int count_per_hour = 60/align_min;
+        if (count_per_hour <=0) count_per_hour = 1;
+
+        int residue = ptm.tm_min /align_min;
+        if (residue < (count_per_hour-1)) {
+                ptm.tm_min = (residue+1)*align_min;
+                ptm.tm_sec = 0;
+        } else {
+                ptm.tm_sec = 0;
+                ptm.tm_min = 0;
+                ptm.tm_hour += 1;
+        }
+
+        time_t next =  mktime(&ptm);
+        KLOG_INFO(LOG_TAG, "next:%ld, sec:%d, min:%d, hour:%d, day:%d\n",
+                next, ptm.tm_sec, ptm.tm_min, ptm.tm_hour, ptm.tm_mday);
+
+        return (next - now);
+}
+// <-- NOTE: Bug #693427 low power Feature END
+
 static void wakealarm_set_interval(int interval) {
     struct itimerspec itval;
 
@@ -104,6 +145,14 @@ static void wakealarm_set_interval(int interval) {
     wakealarm_wake_interval = interval;
 
     if (interval == -1) interval = 0;
+
+// NOTE: Bug #693427 low power Feature BEG-->
+    int next = interval;
+    if (DEFAULT_PERIODIC_CHORES_INTERVAL_SLOW == wakealarm_wake_interval) {
+       next = next_align_start_time();
+       if (next < 0) next = interval;
+    }
+// <-- NOTE: Bug #693427 low power Feature END
 
     itval.it_interval.tv_sec = interval;
     itval.it_interval.tv_nsec = 0;

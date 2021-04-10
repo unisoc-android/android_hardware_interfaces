@@ -14,7 +14,7 @@
 // limitations under the License.
 
 cc_library {
-    name: "android.hardware.fastboot@1.0-impl-mock",
+    name: "android.hardware.fastboot@1.0-impl",
     recovery: true,
     srcs: [
         "Fastboot.cpp",
@@ -26,6 +26,9 @@ cc_library {
         "libhidltransport",
         "libutils",
         "libcutils",
+        "libhardware",
+        "liblog",
+        "libfs_mgr",
         "android.hardware.fastboot@1.0",
     ],
 }

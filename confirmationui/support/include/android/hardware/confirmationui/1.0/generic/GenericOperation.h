@@ -160,6 +160,14 @@ class Operation {
         return ResponseCode::Ignored;
     }
 
+    protected:
+        void finalize(hidl_vec<uint8_t> dTWC, hidl_vec<uint8_t> confirmToken) {
+            if (error_ == ResponseCode::Ignored) return;
+            resultCB_->result(error_, dTWC, confirmToken);
+            error_ = ResponseCode::Ignored;
+            resultCB_ = {};
+        }
+
    private:
     bool acceptAuthToken(const HardwareAuthToken&) { return false; }
     hidl_vec<uint8_t> getMessage() {

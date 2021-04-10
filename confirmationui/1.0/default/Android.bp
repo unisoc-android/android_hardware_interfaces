@@ -19,6 +19,7 @@ cc_binary {
     init_rc: ["android.hardware.confirmationui@1.0-service.rc"],
     vendor: true,
     relative_install_path: "hw",
+    vintf_fragments: ["manifest_confirmationui.xml"],
     cflags: [
         "-Wall",
         "-Wextra",
@@ -40,4 +41,10 @@ cc_binary {
         "liblog",
         "libutils",
     ],
+    sanitize: {
+        cfi: true,
+        diag: {
+            cfi: true,
+        },
+    },
 }

@@ -25,11 +25,23 @@
 #include <android/hardware/confirmationui/1.0/generic/GenericOperation.h>
 #include <android/hardware/confirmationui/support/confirmationui_utils.h>
 
+#include <android/hardware/confirmationui/1.0/types.h>
+
 namespace android {
 namespace hardware {
 namespace confirmationui {
 namespace V1_0 {
 namespace implementation {
+
+struct confirmtionInfo
+{
+    hidl_string prompt;
+    hidl_string promptlocale;
+    hidl_vec<uint8_t> extraDataBuf;
+    hidl_vec<UIOption> uiOption;
+    hidl_vec<uint8_t> dtwc;
+    hidl_vec<uint8_t> confirmToken;
+};
 
 struct MonotonicClockTimeStamper {
     class TimeStamp {
@@ -60,6 +72,20 @@ class MyOperation : public generic::Operation<sp<IConfirmationResultCallback>,
         static MyOperation op;
         return op;
     }
+
+    int confirmationUILaunch();
+
+    ResponseCode deliverUserInputEvent(ResponseCode cmd);
+
+    ResponseCode init(const sp<IConfirmationResultCallback>& resultCB, const hidl_string& promptText,
+                          const hidl_vec<uint8_t>& extraData, const hidl_string& locale,
+                          const hidl_vec<UIOption>& uiOptions);
+
+    private:
+        ~MyOperation();
+
+    public:
+        static struct confirmtionInfo info;
 };
 
 }  // namespace implementation

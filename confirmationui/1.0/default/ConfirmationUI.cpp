@@ -26,6 +26,11 @@
 
 #include <time.h>
 
+#include <log/log.h>
+
+#undef LOG_TAG
+#define LOG_TAG "confirmationui@1.0"
+
 namespace android {
 namespace hardware {
 namespace confirmationui {
@@ -46,7 +51,13 @@ Return<ResponseCode> ConfirmationUI::promptUserConfirmation(
     auto result = operation.init(resultCB, promptText, extraData, locale, uiOptions);
     if (result == ResponseCode::OK) {
         // This is where implementation start the UI and then call setPending on success.
-        operation.setPending();
+        if(!operation.isPending()) {
+            int rc = operation.confirmationUILaunch();
+            ALOGD("%s: after launch confirmationUI (rc:%d)\n", __func__, rc);
+            if(rc != 0) {//fail
+                return ResponseCode::SystemError;
+            }
+        }
     }
     return result;
 }
